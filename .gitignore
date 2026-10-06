@@ -1,0 +1,28 @@
+# Environment files and local credentials
+.env
+.env.*
+*.env
+*.env.*
+.aws/
+.ssh/
+.npmrc
+.netrc
+.git-credentials
+credentials*
+secrets*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Dependencies, generated output, and logs
+node_modules/
+dist/
+build/
+coverage/
+*.log
+
+# Local tooling and OS files
+.codex/
+.agents/
+.DS_Store

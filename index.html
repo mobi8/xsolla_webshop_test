@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Yalla Ball Web Shop</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #222; }
+      h1 { font-size: 28px; }
+      select { font: inherit; max-width: 100%; margin: 0 0 20px 8px; }
+      ul { list-style: none; padding: 0; }
+      li { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid #ddd; }
+      .product-details { flex: 1; min-width: 0; }
+      .buy-button { flex-shrink: 0; align-self: center; width: 120px; min-height: 48px; font: 600 16px system-ui, sans-serif; cursor: pointer; }
+      .buy-button:disabled { cursor: wait; }
+      @media (max-width: 480px) {
+        li { gap: 10px; }
+        img { width: 56px; height: 56px; }
+        .buy-button { width: 100px; }
+      }
+      img { width: 80px; height: 80px; object-fit: contain; flex-shrink: 0; }
+      h2 { font-size: 18px; margin: 0 0 8px; overflow-wrap: anywhere; }
+      p { margin: 6px 0; overflow-wrap: anywhere; }
+      small { color: #555; overflow-wrap: anywhere; }
+      [hidden] { display: none; }
+    </style>
+    <script type="module" src="/catalog.js"></script>
+  </head>
+  <body>
+    <h1>Yalla Ball Web Shop</h1>
+    <p id="status" role="status">Loading products...</p>
+    <div id="filter" hidden>
+      <label for="group">Group</label><select id="group"><option value="">All products</option></select>
+    </div>
+    <ul id="products"></ul>
+    <script>
+      window.XESConfig = {
+        requestAuth: async () => null,
+        token: null
+      };
+    </script>
+    <script type="module" src="https://cdn.xsolla.net/referral-widget-assets/fb1bb22b-e39a-40e3-b8df-ea62866d4939/current/main.js"></script>
+  </body>
+</html>
