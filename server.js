@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { isIPv4 } from 'node:net';
+import { pathToFileURL } from 'node:url';
 
 const projectId = process.env.XSOLLA_PROJECT_ID || '316922';
 const locale = process.env.XSOLLA_LOCALE || 'en';
@@ -33,8 +34,10 @@ function json(response, code, body) {
 }
 
 async function checkout(request, response) {
-  if (request.headers.origin !== `http://${request.headers.host}` || !['localhost', '127.0.0.1'].includes(new URL(`http://${request.headers.host}`).hostname)) {
-    json(response, 403, { error: 'Checkout must be requested from this local shop.' });
+  const onVercel = process.env.VERCEL === '1';
+  const origin = `${onVercel ? 'https' : 'http'}://${request.headers.host}`;
+  if (request.headers.origin !== origin || (!onVercel && !['localhost', '127.0.0.1'].includes(new URL(origin).hostname))) {
+    json(response, 403, { error: 'Checkout must be requested from this shop.' });
     return;
   }
   if (!projectApiKey) {
@@ -42,16 +45,23 @@ async function checkout(request, response) {
     return;
   }
   try {
-    let body = '';
-    for await (const chunk of request) {
-      body += chunk;
-      if (body.length > 4096) {
-        json(response, 413, { error: 'Checkout request is too large.' });
-        return;
+    let body = request.body;
+    if (body === undefined) {
+      body = '';
+      for await (const chunk of request) {
+        body += chunk;
+        if (body.length > 4096) {
+          json(response, 413, { error: 'Checkout request is too large.' });
+          return;
+        }
       }
     }
+    if ((typeof body === 'string' ? body : JSON.stringify(body)).length > 4096) {
+      json(response, 413, { error: 'Checkout request is too large.' });
+      return;
+    }
     let input;
-    try { input = JSON.parse(body); } catch {
+    try { input = typeof body === 'string' ? JSON.parse(body) : body; } catch {
       json(response, 400, { error: 'Invalid checkout request.' });
       return;
     }
@@ -59,18 +69,31 @@ async function checkout(request, response) {
       json(response, 400, { error: 'Invalid product or test-buyer ID.' });
       return;
     }
+    let ip;
+    const country = request.headers['x-vercel-ip-country'];
+    if (onVercel) {
+      ip = request.headers['x-vercel-forwarded-for']?.split(',')[0].trim();
+      if (!isIPv4(ip || '') && !/^[A-Z]{2}$/.test(country || '')) {
+        json(response, 503, { error: 'Unable to determine buyer location for checkout.' });
+        return;
+      }
+    } else {
+      ip = await getDevUserIp();
+    }
+    // Xsolla accepts IPv4 only; Vercel supplies a country for IPv6 buyers.
+    const buyerCountry = isIPv4(ip || '') ? { allow_modify: true } : { value: country, allow_modify: true };
     const upstream = await fetch(`https://store.xsolla.com/api/v3/project/${projectId}/admin/payment/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Basic ${Buffer.from(`${projectId}:${projectApiKey}`).toString('base64')}`,
-        'X-User-Ip': await getDevUserIp(),
+        ...(isIPv4(ip || '') ? { 'X-User-Ip': ip } : {}),
       },
       body: JSON.stringify({
         sandbox: true,
-        user: { id: { value: input.userId }, country: { allow_modify: true } },
+        user: { id: { value: input.userId }, country: buyerCountry },
         purchase: { items: [{ sku: input.sku, quantity: 1 }] },
-        settings: { language: locale, return_url: `http://${request.headers.host}/` },
+        settings: { language: locale, return_url: `${origin}/` },
       }),
       signal: AbortSignal.timeout(20000),
     });
@@ -92,7 +115,7 @@ const files = new Map([
   ['/catalog.js', ['catalog.js', 'text/javascript']],
 ]);
 
-const server = createServer(async (request, response) => {
+export async function handler(request, response) {
   const path = new URL(request.url, 'http://localhost').pathname;
   if (path === '/checkout' && request.method === 'POST') {
     await checkout(request, response);
@@ -103,8 +126,7 @@ const server = createServer(async (request, response) => {
     return;
   }
   if (path === '/config.json') {
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ projectId, locale }));
+    json(response, 200, { projectId, locale });
     return;
   }
   const file = files.get(path);
@@ -119,13 +141,16 @@ const server = createServer(async (request, response) => {
   } catch {
     response.writeHead(500).end('Unable to load page.');
   }
-});
+}
 
 // Try the next port if another local app already uses this one.
-let port = Number(process.env.PORT || 5173);
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') server.listen(++port, '127.0.0.1');
-  else throw error;
-});
-server.on('listening', () => console.log(`Yalla Ball: http://localhost:${port}`));
-server.listen(port, '127.0.0.1');
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const server = createServer(handler);
+  let port = Number(process.env.PORT || 5173);
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') server.listen(++port, '127.0.0.1');
+    else throw error;
+  });
+  server.on('listening', () => console.log(`Yalla Ball: http://localhost:${port}`));
+  server.listen(port, '127.0.0.1');
+}

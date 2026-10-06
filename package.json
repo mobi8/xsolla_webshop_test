@@ -2,5 +2,6 @@
   "name": "yallaball-webshop",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "node server.js" }
+  "scripts": { "dev": "node server.js", "build": "node build.js" },
+  "engines": { "node": "24.x" }
 }

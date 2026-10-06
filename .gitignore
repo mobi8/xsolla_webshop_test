@@ -26,3 +26,4 @@ coverage/
 .codex/
 .agents/
 .DS_Store
+.vercel/
